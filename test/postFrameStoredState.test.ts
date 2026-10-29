@@ -9,7 +9,7 @@ const BOWSER = 0x05;
 const PEACH = 0x09;
 const GAME_AND_WATCH = 0x18;
 
-// The eight bytes appended to Post Frame Update in 3.21.0 (offsets 0x55-0x5C)
+// The eight bytes appended to Post Frame Update in 3.20.0 (offsets 0x55-0x5C)
 type StoredState = {
   storedCharge: number;
   spentBitFlags: number;
@@ -56,9 +56,9 @@ type SyntheticPlayer = { internalCharacterId: number; externalCharacterId: numbe
 // A small replay written from scratch: Event Payloads, Game Start, a few frames and Game End
 function syntheticReplay(version: [number, number, number], players: SyntheticPlayer[], frameCount = 3): Uint8Array {
   const atLeast = (minor: number) => version[0] > 3 || (version[0] === 3 && version[1] >= minor);
-  // Game Start grew to 812 bytes in 3.20.0 (ranked rating and bot status), Post Frame to 92 in 3.21.0
-  const gameStartSize = atLeast(20) ? 812 : 760;
-  const postFrameSize = atLeast(21) ? 92 : 84;
+  // 3.20.0 grew Game Start to 828 bytes (ranked rating, bot status and MMR) and Post Frame to 92
+  const gameStartSize = atLeast(20) ? 828 : 760;
+  const postFrameSize = atLeast(20) ? 92 : 84;
   const sizes: [number, number][] = [
     [Command.GAME_START, gameStartSize],
     [Command.PRE_FRAME_UPDATE, 66],
@@ -107,7 +107,7 @@ function syntheticReplay(version: [number, number, number], players: SyntheticPl
       postView.setUint8(0x7, player.internalCharacterId);
       postView.setFloat32(0x16, 12.5); // percent
       postView.setUint8(0x21, 4); // stocks
-      postView.setUint16(0x53, 100 + playerIndex); // instance id, the last field before 3.21.0
+      postView.setUint16(0x53, 100 + playerIndex); // instance id, the last field before 3.20.0
       if (postFrameSize === 92) {
         post.set(storedStateBytes(player.stored), 0x55);
       }
@@ -186,13 +186,13 @@ const players: SyntheticPlayer[] = [
     stored: { storedCharge: 2, spentBitFlags: 0, wallJumpsUsed: 0, characterByte: 0x36, characterValue: { int: 21 } },
   },
   {
-    // Peach after a float, Toad lift spent, 87 float frames were left
+    // Peach after a float, air neutral-B (Toad) spent, 87 float frames were left
     internalCharacterId: PEACH,
     externalCharacterId: 12,
     stored: { storedCharge: 0, spentBitFlags: 0x09, wallJumpsUsed: 0, characterByte: 0, characterValue: { float: 87 } },
   },
   {
-    // Kirby with Bowser's ability and his own Hammer lift spent
+    // Kirby with Bowser's ability and his own air side-B (Hammer) spent
     internalCharacterId: KIRBY,
     externalCharacterId: 4,
     stored: {
@@ -206,9 +206,9 @@ const players: SyntheticPlayer[] = [
 ];
 
 describe("when reading the stored state in Post Frame Update", () => {
-  it("should read the 3.21.0 fields of a synthetic replay", () => {
-    const game = new SlippiGame(syntheticReplay([3, 21, 0], players));
-    expect(game.getSettings()!.slpVersion).toBe("3.21.0");
+  it("should read the 3.20.0 fields of a synthetic replay", () => {
+    const game = new SlippiGame(syntheticReplay([3, 20, 0], players));
+    expect(game.getSettings()!.slpVersion).toBe("3.20.0");
     const frames = game.getFrames();
     expect(Object.keys(frames)).toHaveLength(3);
     for (let frame = Frames.FIRST; frame < Frames.FIRST + 3; frame++) {
@@ -232,10 +232,10 @@ describe("when reading the stored state in Post Frame Update", () => {
   });
 
   it.each([
-    [3, 20, 0],
     [3, 19, 1],
+    [3, 18, 0],
   ] as [number, number, number][])(
-    "should read the fields as missing in a replay older than 3.21.0 (%i.%i.%i)",
+    "should read the fields as missing in a replay older than 3.20.0 (%i.%i.%i)",
     (...version) => {
       const game = new SlippiGame(syntheticReplay(version, players));
       expect(game.getSettings()!.slpVersion).toBe(version.join("."));
@@ -259,11 +259,11 @@ describe("when reading the stored state in Post Frame Update", () => {
         characterByte: 0x40 + playerIndex,
         characterValue: { float: frame / 4 },
       });
-    const widened = new SlippiGame(widenPostFrames(original, extra, 8, [3, 21, 0]));
+    const widened = new SlippiGame(widenPostFrames(original, extra, 8, [3, 20, 0]));
     const before = new SlippiGame(original).getFrames();
     const after = widened.getFrames();
 
-    expect(widened.getSettings()!.slpVersion).toBe("3.21.0");
+    expect(widened.getSettings()!.slpVersion).toBe("3.20.0");
     expect(Object.keys(after)).toEqual(Object.keys(before));
     let checked = 0;
     for (const frame of Object.keys(before).map(Number)) {
